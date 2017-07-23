@@ -12,9 +12,9 @@ namespace Luegen.Bots
     public class BasicBot : IPlayerController, IGameListener
     {
         private int myId;
-        private List<Card> myCards = new List<Card>();
+        private List<Card> myCards;
         private CardRank roundRank;
-        private Random rand = new Random();
+        private Random rand;
 
         /*
          This is called when the game starts. 
@@ -24,6 +24,8 @@ namespace Luegen.Bots
         void IPlayerController.GameStart(int playerId, int numPlayers)
         {
             myId = playerId;
+            myCards = new List<Card>();
+            rand = new Random();
         }
 
         /*

@@ -19,15 +19,15 @@ namespace Luegen.Core
         public GameMaster(IGameListener gameListener)
         {
             players = new List<Player>();
-            field = new PlayingField();
             this.gameListener = gameListener;
         }
         public void AddPlayer(Player player)
         {
             players.Add(player);
         }
-        public void StartGame()
+        public int StartGame()
         {
+            field = new PlayingField();
             for (var playerId = 0; playerId < players.Count; ++playerId)
             {
                 players[playerId].GameStart(playerId, players.Count);
@@ -46,18 +46,45 @@ namespace Luegen.Core
             Player currentPlayer = players[currentPlayerIndex];
             int previousPlayerIndex = -1;
             Player previousPlayer = null;
-            GameState gameState = GameState.First_Move;
-            // better: while some player has cards
-            while (players.Any(player => player.HasCards()))
+
+            for (var playerId = 0; playerId < players.Count; ++playerId)
             {
-                if (!currentPlayer.HasCards())
+                var hasAllFourOfRank = players[playerId].CheckFourCards();
+                if (hasAllFourOfRank.Count > 0)
                 {
-                    currentPlayerIndex = (currentPlayerIndex + 1) % players.Count;
-                    currentPlayer = players[currentPlayerIndex];
-                    continue;
+                    gameListener.PlayerHasFourOf(playerId, hasAllFourOfRank);
                 }
+            }
+
+            GameState gameState = GameState.First_Move;
+            while (true)
+            {
                 try
                 {
+                    if (players.Where(player => player.HasCards()).Count() == 1)
+                    {
+                        var isLie = field.AreActiveCardsLie();
+                        gameListener.ActiveCardsReveiled(field.GetActiveCards());
+                        gameListener.ShowdownResult(previousPlayerIndex, isLie);
+                        if (isLie)
+                        {
+                            AllCardsTo(previousPlayerIndex);
+                            previousPlayer = null;
+                            previousPlayerIndex = -1;
+                            gameState = GameState.First_Move;
+                        }
+                        else
+                        {
+                            AllCardsTo(currentPlayerIndex);
+                            break;
+                        }
+                    }
+                    if (!currentPlayer.HasCards())
+                    {
+                        currentPlayerIndex = (currentPlayerIndex + 1) % players.Count;
+                        currentPlayer = players[currentPlayerIndex];
+                        continue;
+                    }
 
                     gameListener.PlayerStartTurn(currentPlayerIndex);
                     if (gameState == GameState.First_Move)
@@ -114,16 +141,22 @@ namespace Luegen.Core
                 }
                 catch (PlayerException e)
                 {
-                    Console.WriteLine("Player Error: " + e.Message);
+                    Console.WriteLine("Player Error: " + e.ToString());
                     gameListener.PlayerLooses(e.PlayerId);
-                    return;
+                    return e.PlayerId;
                 }
             }
-            AllCardsTo(currentPlayerIndex);
-            var loosingPlayer = players
-                .OrderByDescending(x => x.GetNegativePoints())
+            var loosingPlayers = players
+                .GroupBy(x => x.GetNegativePoints())
+                .OrderByDescending(g => g.Key)
                 .First();
-            gameListener.PlayerLooses(players.IndexOf(loosingPlayer));
+            if (loosingPlayers.Count() == 1)
+            {
+                gameListener.PlayerLooses(players.IndexOf(loosingPlayers.First()));
+                return players.IndexOf(loosingPlayers.First());
+            }
+            // It's a tie
+            return -1;
         }
 
         private void AllCardsTo(int playerIndex)

@@ -6,7 +6,7 @@ namespace Luegen.BotArena.ConsoleInterface
 {
     class ConsoleGameOutput : IGameListener
     {
-        private const int sleepTime = 1500;
+        private const int sleepTime = 0;
         public void ActiveCardsReveiled(List<Card> reveiledCards)
         {
             Console.WriteLine("Reveiled Cards: ");
@@ -25,17 +25,21 @@ namespace Luegen.BotArena.ConsoleInterface
 
         public void PlayerHasFourOf(int playerId, List<CardRank> ranks)
         {
+            Console.ForegroundColor = ConsoleColor.Red;
             foreach (var rank in ranks)
             {
                 Console.WriteLine("Player{0} has four of {1}", playerId + 1, rank.ToString());
             }
+            Console.ResetColor();
             System.Threading.Thread.Sleep(sleepTime);
         }
 
         public void PlayerLooses(int playerId)
         {
+            Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine("Player{0} looses", playerId + 1);
             System.Threading.Thread.Sleep(sleepTime);
+            Console.ResetColor();
         }
 
         public void PlayerMakesTrustDecission(int playerId, TrustDecission decission)

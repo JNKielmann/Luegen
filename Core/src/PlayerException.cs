@@ -10,6 +10,12 @@ namespace Luegen.Core
             PlayerId = playerId;
         }
 
+        public PlayerException(int playerId, Exception innerException, string message)
+            : base(message, innerException)
+        {
+            PlayerId = playerId;
+        }
+
         public int PlayerId { get; private set; }
     }
 }

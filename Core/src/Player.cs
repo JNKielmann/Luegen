@@ -20,8 +20,6 @@ namespace Luegen.Core
         {
             this.controller = controller;
             this.Name = name;
-            cards = new List<Card>();
-            negativePoints = 0;
         }
 
         public string Name { get; }
@@ -29,6 +27,8 @@ namespace Luegen.Core
         public void GameStart(int playerId, int numPlayers)
         {
             myId = playerId;
+            cards = new List<Card>();
+            negativePoints = 0;
             try
             {
                 controller.GameStart(playerId, numPlayers);
@@ -36,7 +36,7 @@ namespace Luegen.Core
             catch (Exception e)
             {
                 throw new PlayerException(
-                    playerId,
+                    playerId, e,
                     "Player code cause exception" + e.GetType().ToString() + ": " + e.Message
                 );
             }
@@ -52,7 +52,7 @@ namespace Luegen.Core
             catch (Exception e)
             {
                 throw new PlayerException(
-                    myId,
+                    myId, e,
                     "Player code cause exception" + e.GetType().ToString() + ": " + e.Message
                 );
             }
@@ -68,7 +68,7 @@ namespace Luegen.Core
             catch (Exception e)
             {
                 throw new PlayerException(
-                    myId,
+                    myId, e,
                     "Player code cause exception" + e.GetType().ToString() + ": " + e.Message
                 );
             }
@@ -89,7 +89,7 @@ namespace Luegen.Core
             catch (Exception e)
             {
                 throw new PlayerException(
-                    myId,
+                    myId, e,
                     "Player code cause exception" + e.GetType().ToString() + ": " + e.Message
                 );
             }
@@ -102,7 +102,7 @@ namespace Luegen.Core
             catch (Exception e)
             {
                 throw new PlayerException(
-                    myId,
+                    myId, e,
                     "Player code cause exception" + e.GetType().ToString() + ": " + e.Message
                 );
             }
@@ -119,7 +119,7 @@ namespace Luegen.Core
             catch (Exception e)
             {
                 throw new PlayerException(
-                    myId,
+                    myId, e,
                     "Player code cause exception" + e.GetType().ToString() + ": " + e.Message
                 );
             }
@@ -134,7 +134,7 @@ namespace Luegen.Core
                 catch (Exception e)
                 {
                     throw new PlayerException(
-                        myId,
+                        myId, e,
                         "Player code cause exception" + e.GetType().ToString() + ": " + e.Message
                     );
                 }
@@ -184,7 +184,7 @@ namespace Luegen.Core
             catch (Exception e)
             {
                 throw new PlayerException(
-                    myId,
+                    myId, e,
                     "Player code cause exception" + e.GetType().ToString() + ": " + e.Message
                 );
             }
