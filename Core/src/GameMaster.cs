@@ -22,7 +22,7 @@ namespace Luegen.Core
         private Player currentPlayer;
         private int previousPlayerId;
         private Player previousPlayer;
-        private GameState gameState = GameState.First_Move;
+        private GameState gameState;
 
 
         public GameMaster(IGameListener gameListener)
@@ -180,6 +180,8 @@ namespace Luegen.Core
             currentPlayer = players[currentPlayerId];
             previousPlayerId = -1;
             previousPlayer = null;
+
+            gameState = GameState.First_Move;
         }
 
         private void ShufflePlayerPositions()
