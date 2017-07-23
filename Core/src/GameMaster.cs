@@ -13,8 +13,17 @@ namespace Luegen.Core
     {
         private readonly Random random = new Random();
         private List<Player> players;
+        private int[] posToPlayerId;
+        private int[] playerIdToPos;
         private PlayingField field;
         private IGameListener gameListener;
+        private int currentPlayerId;
+        private int currentPlayerPos;
+        private Player currentPlayer;
+        private int previousPlayerId;
+        private Player previousPlayer;
+        private GameState gameState = GameState.First_Move;
+
 
         public GameMaster(IGameListener gameListener)
         {
@@ -27,70 +36,27 @@ namespace Luegen.Core
         }
         public int StartGame()
         {
-            var posToPlayerId = Enumerable.Range(0, players.Count).OrderBy(x => random.Next()).ToArray();
-            var playerIdToPos = new int[players.Count];
-            for(var pos = 0; pos < players.Count; ++pos){
-                playerIdToPos[posToPlayerId[pos]] = pos;
-            }
-
             field = new PlayingField();
-            for (var playerId = 0; playerId < players.Count; ++playerId)
-            {
-                players[playerId].GameStart(playerId, posToPlayerId);
-            }
+            ShufflePlayerPositions();
+            ForEachPlayer(NotifyGameStarted);
+            
             List<Card> deck = CreateCardDeck();
-            int nextCardIsForPlayer = 0;
-            while (deck.Count > 0)
-            {
-                Card card = PickRandomCard(deck);
-                players[nextCardIsForPlayer].AddCard(card);
-                gameListener.PlayerReceivesStartCard(nextCardIsForPlayer);
-                nextCardIsForPlayer = (nextCardIsForPlayer + 1) % players.Count;
-            }
-            Card startCard = new Card(CardSuit.Diamond, CardRank.Seven);
-            int currentPlayerId = players.FindIndex(player => player.HasCard(startCard));
-            int currentPlayerPos = playerIdToPos[currentPlayerId];
-            Player currentPlayer = players[currentPlayerId];
-            int previousPlayerId = -1;
-            Player previousPlayer = null;
+            DealAllCardsFrom(deck);       
+            FindStartingPlayer();
+            ForEachPlayer(CheckFourCards);            
 
-            for (var playerId = 0; playerId < players.Count; ++playerId)
-            {
-                var hasAllFourOfRank = players[playerId].CheckFourCards();
-                if (hasAllFourOfRank.Count > 0)
-                {
-                    gameListener.PlayerHasFourOf(playerId, hasAllFourOfRank);
-                }
-            }
-
-            GameState gameState = GameState.First_Move;
-            while (true)
+            while (AtLeastOnePlayerHasCards())
             {
                 try
                 {
-                    if (players.Where(player => player.HasCards()).Count() == 1)
+                    if (OnlyOnePlayerHasCards())
                     {
-                        var isLie = field.AreActiveCardsLie();
-                        gameListener.ActiveCardsReveiled(field.GetActiveCards());
-                        gameListener.ShowdownResult(previousPlayerId, isLie);
-                        if (isLie)
-                        {
-                            AllCardsTo(previousPlayerId);
-                            previousPlayer = null;
-                            previousPlayerId = -1;
-                            gameState = GameState.First_Move;
-                        }
-                        else
-                        {
-                            AllCardsTo(currentPlayerId);
-                            break;
-                        }
+                        DoShowdown();
+                        continue;
                     }
                     if (!currentPlayer.HasCards())
                     {
-                        currentPlayerPos = (currentPlayerPos + 1) % players.Count;
-                        currentPlayerId = posToPlayerId[currentPlayerPos];
-                        currentPlayer = players[currentPlayerId];
+                        SkipPlayer();
                         continue;
                     }
 
@@ -103,12 +69,7 @@ namespace Luegen.Core
                         gameListener.PlayerPlaysActiveCard(currentPlayerId, selectedCards.Count);
                         field.SetRoundRank(selectedRank);
                         gameListener.PlayerAnnouncesRank(currentPlayerId, selectedRank);
-                        previousPlayer = currentPlayer;
-                        previousPlayerId = currentPlayerId;
-                        currentPlayerPos = (currentPlayerPos + 1) % players.Count;
-                        currentPlayerId = posToPlayerId[currentPlayerPos];
-                        currentPlayer = players[currentPlayerId];
-                        gameState = GameState.Later_Move;
+                        NextPlayersTurn();
                     }
                     else if (gameState == GameState.Later_Move)
                     {
@@ -118,35 +79,12 @@ namespace Luegen.Core
                             gameListener.PlayerMakesTrustDecission(currentPlayerId, TrustDecission.Trust);
                             field.SetActiveCards(selectedCards);
                             gameListener.PlayerPlaysActiveCard(currentPlayerId, selectedCards.Count);
-                            previousPlayer = currentPlayer;
-                            previousPlayerId = currentPlayerId;
-                            currentPlayerPos = (currentPlayerPos + 1) % players.Count;
-                            currentPlayerId = posToPlayerId[currentPlayerPos];
-                            currentPlayer = players[currentPlayerId];
+                            NextPlayersTurn();
                         }
                         else
                         {
                             gameListener.PlayerMakesTrustDecission(currentPlayerId, TrustDecission.DoNotTrust);
-                            var isLie = field.AreActiveCardsLie();
-                            gameListener.ActiveCardsReveiled(field.GetActiveCards());
-                            gameListener.ShowdownResult(previousPlayerId, isLie);
-                            if (isLie)
-                            {
-                                AllCardsTo(previousPlayerId);
-                                previousPlayer = null;
-                                previousPlayerId = -1;
-                                gameState = GameState.First_Move;
-                            }
-                            else
-                            {
-                                AllCardsTo(currentPlayerId);
-                                previousPlayer = null;
-                                previousPlayerId = -1;
-                                currentPlayerPos = (currentPlayerPos + 1) % players.Count;
-                                currentPlayerId = posToPlayerId[currentPlayerPos];
-                                currentPlayer = players[currentPlayerId];
-                                gameState = GameState.First_Move;
-                            }
+                            DoShowdown();
                         }
                     }
                 }
@@ -157,67 +95,176 @@ namespace Luegen.Core
                     return e.PlayerId;
                 }
             }
-            var loosingPlayers = players
-                .GroupBy(x => x.GetNegativePoints())
-                .OrderByDescending(g => g.Key)
-                .First();
+            var loosingPlayers = GetLoosingPlayers();
             if (loosingPlayers.Count() == 1)
             {
-                gameListener.PlayerLooses(players.IndexOf(loosingPlayers.First()));
-                return players.IndexOf(loosingPlayers.First());
+                var loosingPlayerId = players.IndexOf(loosingPlayers.First());
+                gameListener.PlayerLooses(loosingPlayerId);
+                return loosingPlayerId;
             }
             // It's a tie
             return -1;
         }
 
-        private void AllCardsTo(int playerIndex)
+        private void DoShowdown()
         {
-            field.MoveAllCardsTo(players[playerIndex]);
-            gameListener.PlayerReceivesAllCards(playerIndex);
-            var hasAllFourOfRank = players[playerIndex].CheckFourCards();
+            var isLie = field.AreActiveCardsLie();
+            gameListener.ActiveCardsReveiled(field.GetActiveCards());
+            gameListener.ShowdownResult(previousPlayerId, isLie);
+            if (isLie)
+            {
+                AllCardsTo(previousPlayerId);
+                ThisPlayerStartsNewRound();
+            }
+            else
+            {
+                AllCardsTo(currentPlayerId);
+                NextPlayerStartsNewRound();
+            }
+        }
+
+        private List<Player> GetLoosingPlayers()
+        {
+            return players
+                .GroupBy(x => x.GetNegativePoints())
+                .OrderByDescending(g => g.Key)
+                .First()
+                .ToList();
+        }
+
+        private void NextPlayerStartsNewRound()
+        {
+            previousPlayer = null;
+            previousPlayerId = -1;
+
+            currentPlayerPos = (currentPlayerPos + 1) % players.Count;
+            currentPlayerId = posToPlayerId[currentPlayerPos];
+            currentPlayer = players[currentPlayerId];
+
+            gameState = GameState.First_Move;
+        }
+
+        private void NextPlayersTurn()
+        {
+            previousPlayer = currentPlayer;
+            previousPlayerId = currentPlayerId;
+
+            currentPlayerPos = (currentPlayerPos + 1) % players.Count;
+            currentPlayerId = posToPlayerId[currentPlayerPos];
+            currentPlayer = players[currentPlayerId];
+
+            gameState = GameState.Later_Move;
+        }
+
+        private void SkipPlayer()
+        {
+            currentPlayerPos = (currentPlayerPos + 1) % players.Count;
+            currentPlayerId = posToPlayerId[currentPlayerPos];
+            currentPlayer = players[currentPlayerId];
+        }
+
+        private void ThisPlayerStartsNewRound()
+        {
+            previousPlayer = null;
+            previousPlayerId = -1;
+
+            gameState = GameState.First_Move;
+        }
+
+        private void FindStartingPlayer()
+        {
+            Card startCard = new Card(CardSuit.Diamond, CardRank.Seven);
+            
+            currentPlayerId = players.FindIndex(player => player.HasCard(startCard));
+            currentPlayerPos = playerIdToPos[currentPlayerId];
+            currentPlayer = players[currentPlayerId];
+            previousPlayerId = -1;
+            previousPlayer = null;
+        }
+
+        private void ShufflePlayerPositions()
+        {
+            posToPlayerId = Enumerable.Range(0, players.Count).OrderBy(x => random.Next()).ToArray();
+            playerIdToPos = new int[players.Count];
+            for (var pos = 0; pos < players.Count; ++pos)
+            {
+                playerIdToPos[posToPlayerId[pos]] = pos;
+            }
+        }
+
+        private void ForEachPlayer(Action<int> action) 
+        {
+            for (var playerId = 0; playerId < players.Count; ++playerId)
+            {
+                action(playerId);
+            }
+        }
+
+        private void NotifyGameStarted(int playerId) 
+        {
+            players[playerId].GameStart(playerId, posToPlayerId);
+        }
+
+        private void DealAllCardsFrom(List<Card> deck) 
+        {
+            var nextCardIsForPos = 0;
+            while (deck.Count > 0)
+            {
+                var nextCardIsForPlayerId = posToPlayerId[nextCardIsForPos];
+                var card = PickRandomCard(deck);
+                players[nextCardIsForPlayerId].AddCard(card);
+                gameListener.PlayerReceivesStartCard(nextCardIsForPlayerId);
+                nextCardIsForPos = (nextCardIsForPos + 1) % players.Count;
+            }
+        }
+
+        private bool OnlyOnePlayerHasCards()
+        {
+            return players.Where(player => player.HasCards()).Count() == 1;
+        }
+
+        private bool AtLeastOnePlayerHasCards() {
+            return players.Any(player => player.HasCards());
+        }
+
+        private void AllCardsTo(int playerId)
+        {
+            field.MoveAllCardsTo(players[playerId]);
+            gameListener.PlayerReceivesAllCards(playerId);
+            CheckFourCards(playerId);
+        }
+
+        private void CheckFourCards(int playerId)
+        {
+            var hasAllFourOfRank = players[playerId].CheckFourCards();
             if (hasAllFourOfRank.Count > 0)
             {
-                gameListener.PlayerHasFourOf(playerIndex, hasAllFourOfRank);
+                gameListener.PlayerHasFourOf(playerId, hasAllFourOfRank);
             }
         }
 
         private Card PickRandomCard(List<Card> deck)
         {
 
-            int index = (int)(random.NextDouble() * deck.Count);
-            Card pickedCard = deck[index];
-            deck.RemoveAt(index);
-            return pickedCard;
+        int index = (int)(random.NextDouble() * deck.Count);
+        Card pickedCard = deck[index];
+        deck.RemoveAt(index);
+        return pickedCard;
         }
 
         private List<Card> CreateCardDeck()
         {
-            var from = CardRank.Seven;
-            var to = CardRank.Ace;
-            var deck = new List<Card>();
-            for (CardRank rank = from; rank <= to; ++rank)
+        var from = CardRank.Seven;
+        var to = CardRank.Ace;
+        var deck = new List<Card>();
+        for (CardRank rank = from; rank <= to; ++rank)
+        {
+            foreach (CardSuit suit in Enum.GetValues(typeof(CardSuit)))
             {
-                foreach (CardSuit suit in Enum.GetValues(typeof(CardSuit)))
-                {
-                    deck.Add(new Card(suit, rank));
-                }
+            deck.Add(new Card(suit, rank));
             }
-            return deck;
+        }
+        return deck;
         }
     }
 }
-
-/*
-Events:
-Player_Receives_Start_Card
-Player_Plays_Active_Card (int numCards)
-Player_Announces_Rank (CardRank rank)
-Player_Trusts
-Player_Does_Not_Trust
-Active_Cards_Reveiled (List<Card> reveiledCards)
-Player_Receives_Cards (List<Card> receivedCards)
-
-
-
-
- */
