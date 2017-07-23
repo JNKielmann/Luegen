@@ -4,7 +4,7 @@ namespace Luegen.Core
 {
     public interface IPlayerController
     {
-        void GameStart(int playerId, int numPlayers);
+        void GameStart(int playerId, int[] positionToPlayerId);
 
         List<Card> SelectCardsOrShowdown();
 

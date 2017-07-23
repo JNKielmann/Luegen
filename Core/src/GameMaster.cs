@@ -27,10 +27,16 @@ namespace Luegen.Core
         }
         public int StartGame()
         {
+            var posToPlayerId = Enumerable.Range(0, players.Count).OrderBy(x => random.Next()).ToArray();
+            var playerIdToPos = new int[players.Count];
+            for(var pos = 0; pos < players.Count; ++pos){
+                playerIdToPos[posToPlayerId[pos]] = pos;
+            }
+
             field = new PlayingField();
             for (var playerId = 0; playerId < players.Count; ++playerId)
             {
-                players[playerId].GameStart(playerId, players.Count);
+                players[playerId].GameStart(playerId, posToPlayerId);
             }
             List<Card> deck = CreateCardDeck();
             int nextCardIsForPlayer = 0;
@@ -42,9 +48,10 @@ namespace Luegen.Core
                 nextCardIsForPlayer = (nextCardIsForPlayer + 1) % players.Count;
             }
             Card startCard = new Card(CardSuit.Diamond, CardRank.Seven);
-            int currentPlayerIndex = players.FindIndex(player => player.HasCard(startCard));
-            Player currentPlayer = players[currentPlayerIndex];
-            int previousPlayerIndex = -1;
+            int currentPlayerId = players.FindIndex(player => player.HasCard(startCard));
+            int currentPlayerPos = playerIdToPos[currentPlayerId];
+            Player currentPlayer = players[currentPlayerId];
+            int previousPlayerId = -1;
             Player previousPlayer = null;
 
             for (var playerId = 0; playerId < players.Count; ++playerId)
@@ -65,40 +72,42 @@ namespace Luegen.Core
                     {
                         var isLie = field.AreActiveCardsLie();
                         gameListener.ActiveCardsReveiled(field.GetActiveCards());
-                        gameListener.ShowdownResult(previousPlayerIndex, isLie);
+                        gameListener.ShowdownResult(previousPlayerId, isLie);
                         if (isLie)
                         {
-                            AllCardsTo(previousPlayerIndex);
+                            AllCardsTo(previousPlayerId);
                             previousPlayer = null;
-                            previousPlayerIndex = -1;
+                            previousPlayerId = -1;
                             gameState = GameState.First_Move;
                         }
                         else
                         {
-                            AllCardsTo(currentPlayerIndex);
+                            AllCardsTo(currentPlayerId);
                             break;
                         }
                     }
                     if (!currentPlayer.HasCards())
                     {
-                        currentPlayerIndex = (currentPlayerIndex + 1) % players.Count;
-                        currentPlayer = players[currentPlayerIndex];
+                        currentPlayerPos = (currentPlayerPos + 1) % players.Count;
+                        currentPlayerId = posToPlayerId[currentPlayerPos];
+                        currentPlayer = players[currentPlayerId];
                         continue;
                     }
 
-                    gameListener.PlayerStartTurn(currentPlayerIndex);
+                    gameListener.PlayerStartTurn(currentPlayerId);
                     if (gameState == GameState.First_Move)
                     {
                         CardRank selectedRank;
                         var selectedCards = currentPlayer.SelectCardsAndRank(out selectedRank);
                         field.SetActiveCards(selectedCards);
-                        gameListener.PlayerPlaysActiveCard(currentPlayerIndex, selectedCards.Count);
+                        gameListener.PlayerPlaysActiveCard(currentPlayerId, selectedCards.Count);
                         field.SetRoundRank(selectedRank);
-                        gameListener.PlayerAnnouncesRank(currentPlayerIndex, selectedRank);
+                        gameListener.PlayerAnnouncesRank(currentPlayerId, selectedRank);
                         previousPlayer = currentPlayer;
-                        previousPlayerIndex = currentPlayerIndex;
-                        currentPlayerIndex = (currentPlayerIndex + 1) % players.Count;
-                        currentPlayer = players[currentPlayerIndex];
+                        previousPlayerId = currentPlayerId;
+                        currentPlayerPos = (currentPlayerPos + 1) % players.Count;
+                        currentPlayerId = posToPlayerId[currentPlayerPos];
+                        currentPlayer = players[currentPlayerId];
                         gameState = GameState.Later_Move;
                     }
                     else if (gameState == GameState.Later_Move)
@@ -106,34 +115,36 @@ namespace Luegen.Core
                         var selectedCards = currentPlayer.SelectCardsOrShowdown();
                         if (selectedCards != null)
                         {
-                            gameListener.PlayerMakesTrustDecission(currentPlayerIndex, TrustDecission.Trust);
+                            gameListener.PlayerMakesTrustDecission(currentPlayerId, TrustDecission.Trust);
                             field.SetActiveCards(selectedCards);
-                            gameListener.PlayerPlaysActiveCard(currentPlayerIndex, selectedCards.Count);
+                            gameListener.PlayerPlaysActiveCard(currentPlayerId, selectedCards.Count);
                             previousPlayer = currentPlayer;
-                            previousPlayerIndex = currentPlayerIndex;
-                            currentPlayerIndex = (currentPlayerIndex + 1) % players.Count;
-                            currentPlayer = players[currentPlayerIndex];
+                            previousPlayerId = currentPlayerId;
+                            currentPlayerPos = (currentPlayerPos + 1) % players.Count;
+                            currentPlayerId = posToPlayerId[currentPlayerPos];
+                            currentPlayer = players[currentPlayerId];
                         }
                         else
                         {
-                            gameListener.PlayerMakesTrustDecission(currentPlayerIndex, TrustDecission.DoNotTrust);
+                            gameListener.PlayerMakesTrustDecission(currentPlayerId, TrustDecission.DoNotTrust);
                             var isLie = field.AreActiveCardsLie();
                             gameListener.ActiveCardsReveiled(field.GetActiveCards());
-                            gameListener.ShowdownResult(previousPlayerIndex, isLie);
+                            gameListener.ShowdownResult(previousPlayerId, isLie);
                             if (isLie)
                             {
-                                AllCardsTo(previousPlayerIndex);
+                                AllCardsTo(previousPlayerId);
                                 previousPlayer = null;
-                                previousPlayerIndex = -1;
+                                previousPlayerId = -1;
                                 gameState = GameState.First_Move;
                             }
                             else
                             {
-                                AllCardsTo(currentPlayerIndex);
+                                AllCardsTo(currentPlayerId);
                                 previousPlayer = null;
-                                previousPlayerIndex = -1;
-                                currentPlayerIndex = (currentPlayerIndex + 1) % players.Count;
-                                currentPlayer = players[currentPlayerIndex];
+                                previousPlayerId = -1;
+                                currentPlayerPos = (currentPlayerPos + 1) % players.Count;
+                                currentPlayerId = posToPlayerId[currentPlayerPos];
+                                currentPlayer = players[currentPlayerId];
                                 gameState = GameState.First_Move;
                             }
                         }

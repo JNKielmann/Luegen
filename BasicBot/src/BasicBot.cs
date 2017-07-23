@@ -21,7 +21,7 @@ namespace Luegen.Bots
          playerId is the id of this player (between 0 and numPlayers - 1)
          numPlayers is the total number of players in the game
          */
-        void IPlayerController.GameStart(int playerId, int numPlayers)
+        void IPlayerController.GameStart(int playerId, int[] positionToPlayerId)
         {
             myId = playerId;
             myCards = new List<Card>();

@@ -24,14 +24,14 @@ namespace Luegen.Core
 
         public string Name { get; }
 
-        public void GameStart(int playerId, int numPlayers)
+        public void GameStart(int playerId, int[] positionToPlayerId)
         {
             myId = playerId;
             cards = new List<Card>();
             negativePoints = 0;
             try
             {
-                controller.GameStart(playerId, numPlayers);
+                controller.GameStart(playerId, positionToPlayerId);
             }
             catch (Exception e)
             {

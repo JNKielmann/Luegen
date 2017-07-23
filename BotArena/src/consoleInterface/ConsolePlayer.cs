@@ -9,6 +9,11 @@ namespace Luegen.BotArena.ConsoleInterface
     {
         private List<Card> myCards = new List<Card>();
 
+        void IPlayerController.GameStart(int playerId, int[] positionToPlayerId)
+        {
+
+        }
+
         void IPlayerController.HasFourOf(List<CardRank> hasAllFour)
         {
             myCards.RemoveAll(x => hasAllFour.Contains(x.rank));
@@ -141,11 +146,6 @@ namespace Luegen.BotArena.ConsoleInterface
         private bool tryParseRank(string input, out CardRank rank)
         {
             return Enum.TryParse(input.Trim(), true, out rank);
-        }
-
-        void IPlayerController.GameStart(int playerId, int numPlayers)
-        {
-
         }
 
         void IGameListener.ActiveCardsReveiled(List<Card> reveiledCards)
